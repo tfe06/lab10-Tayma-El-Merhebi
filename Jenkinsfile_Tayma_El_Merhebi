@@ -1,0 +1,54 @@
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Setup') {
+            steps {
+                bat 'python -m venv venv'
+                bat 'venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                bat 'if not exist reports mkdir reports'
+            }
+        }
+        stage('Lint') {
+            steps {
+                bat 'venv\\Scripts\\python.exe -m flake8 app.py deploy.py tests'
+            }
+        }
+        stage('Test') {
+            steps {
+                bat 'venv\\Scripts\\python.exe -m pytest -v --junitxml=reports/tests.xml'
+            }
+        }
+        stage('Coverage') {
+            steps {
+                bat 'venv\\Scripts\\python.exe -m coverage run --source=app -m pytest'
+                bat 'venv\\Scripts\\python.exe -m coverage report -m'
+                bat 'venv\\Scripts\\python.exe -m coverage xml -o reports/coverage.xml'
+                bat 'venv\\Scripts\\python.exe -m coverage html -d reports/htmlcov'
+            }
+        }
+        stage('Security Scan') {
+            steps {
+                bat 'venv\\Scripts\\python.exe -m bandit app.py deploy.py -f txt -o reports/bandit.txt'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                bat 'venv\\Scripts\\python.exe deploy.py'
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
+        }
+        cleanup {
+            deleteDir()
+        }
+    }
+}
